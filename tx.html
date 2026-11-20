@@ -343,7 +343,7 @@
 
     <div style="margin-bottom: 16px;">
       <label for="hostRed">IP o Host de Red para Otra PC y Celular (ej. 192.168.1.50:9000)</label>
-      <input id="hostRed" type="text" placeholder="Pon tu IPv4:9000 (ej. 192.168.1.50:9000) para generar enlaces de Otra PC y Celular" />
+      <input id="hostRed" type="text" placeholder="Ej. sonoritmo-nube.onrender.com o 192.168.1.50:9000" />
     </div>
 
     <div class="row">
@@ -478,52 +478,9 @@
     }
 
     function getLocalHostBase() {
-      const port = window.location.port || "9000";
+      const host = window.location.host || `127.0.0.1:${window.location.port || "9000"}`;
       const proto = window.location.protocol === "https:" ? "https:" : "http:";
-      return `${proto}//127.0.0.1:${port}`;
-    }
-
-    function detectLocalIPv4() {
-      return new Promise((resolve) => {
-        try {
-          const RTCPeerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
-          if (!RTCPeerConnection) return resolve("");
-
-          const pc = new RTCPeerConnection({ iceServers: [] });
-          pc.createDataChannel("");
-
-          let resolved = false;
-          const finish = (ip) => {
-            if (!resolved) {
-              resolved = true;
-              try { pc.close(); } catch (_) {}
-              resolve(ip || "");
-            }
-          };
-
-          pc.onicecandidate = (event) => {
-            if (!event || !event.candidate || !event.candidate.candidate) {
-              return finish("");
-            }
-            const candidate = event.candidate.candidate;
-            const match = candidate.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
-            if (match && match[1]) {
-              const ip = match[1];
-              if (!ip.startsWith("127.") && !ip.startsWith("169.254.")) {
-                return finish(ip);
-              }
-            }
-          };
-
-          pc.createOffer()
-            .then(offer => pc.setLocalDescription(offer))
-            .catch(() => finish(""));
-
-          setTimeout(() => finish(""), 1200);
-        } catch (_) {
-          resolve("");
-        }
-      });
+      return `${proto}//${host}`;
     }
 
     function getNetworkHostBase() {
@@ -533,7 +490,9 @@
 
       const cleanHost = targetHost.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
       const isHttps =
+        window.location.protocol === "https:" ||
         cleanHost.endsWith(":443") ||
+        cleanHost.endsWith(".onrender.com") ||
         cleanHost.endsWith(".ngrok-free.app") ||
         cleanHost.endsWith(".ngrok.io") ||
         cleanHost.endsWith(".trycloudflare.com") ||
@@ -971,6 +930,10 @@
         ws = new WebSocket(`${wsProto}//${wsHost}/ws/tx/${encodeURIComponent(punto)}`);
         ws.binaryType = "arraybuffer";
 
+        isRunning = true;
+        btnStop.disabled = false;
+        startMonitorLoop();
+
         setDot(dotStep3, "warn");
         metricStep3.textContent = "Conectando enlace...";
 
@@ -981,8 +944,8 @@
           renderReceivers();
         };
 
-        ws.onclose = () => {
-          writeLog("Enlace de transmisión cerrado.");
+        ws.onclose = (ev) => {
+          writeLog(`Enlace de transmisión cerrado (código ${ev.code}).`);
           if (isRunning) {
             stopTX();
           } else {
@@ -1019,83 +982,82 @@
             bytesSent += interleaved.byteLength;
           }
         };
-
-        isRunning = true;
-        btnStop.disabled = false;
-        startMonitorLoop();
-        renderReceivers();
       } catch (err) {
-        writeLog(`No se pudo iniciar TX: ${err.message}`);
-        setDot(dotStep1, "err");
-        metricStep1.textContent = "Error de entrada";
-        btnStart.disabled = false;
-        btnStop.disabled = true;
+        writeLog(`Error al iniciar TX: ${err.message}`);
+        stopTX();
       }
     }
 
     function stopTX() {
       isRunning = false;
+      btnStart.disabled = false;
+      btnStop.disabled = true;
+
       if (monitorTimer) {
         clearInterval(monitorTimer);
         monitorTimer = null;
       }
 
       if (processor) {
-        processor.disconnect();
+        try { processor.disconnect(); } catch (_) {}
         processor.onaudioprocess = null;
         processor = null;
       }
-      if (muteGain) {
-        muteGain.disconnect();
-        muteGain = null;
-      }
-      if (gainNode) {
-        gainNode.disconnect();
-        gainNode = null;
-      }
       if (analyser) {
-        analyser.disconnect();
+        try { analyser.disconnect(); } catch (_) {}
         analyser = null;
       }
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(t => t.stop());
-        mediaStream = null;
+      if (gainNode) {
+        try { gainNode.disconnect(); } catch (_) {}
+        gainNode = null;
       }
-      if (displayCaptureStream) {
-        displayCaptureStream.getTracks().forEach(t => t.stop());
-        displayCaptureStream = null;
+      if (muteGain) {
+        try { muteGain.disconnect(); } catch (_) {}
+        muteGain = null;
       }
       if (audioCtx) {
         audioCtx.close().catch(() => {});
         audioCtx = null;
       }
+
+      if (selectInput.value !== "__SYSTEM_AUDIO__") {
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(t => t.stop());
+          mediaStream = null;
+        }
+        if (displayCaptureStream) {
+          displayCaptureStream.getTracks().forEach(t => t.stop());
+          displayCaptureStream = null;
+        }
+      }
+
       if (ws) {
-        ws.onclose = null;
-        ws.onerror = null;
         try { ws.close(); } catch (_) {}
         ws = null;
       }
-
-      barStep1.style.width = "0%";
-      barStep2.style.width = "0%";
-      barStep3.style.width = "0%";
-
-      metricStep1.textContent = "Sin señal (-∞ dB)";
-      metricStep2.textContent = "Detenido (0 bloques/s)";
-      metricStep3.textContent = "Sin envío (0.0 KB/s)";
 
       setDot(dotStep1, "");
       setDot(dotStep2, "");
       setDot(dotStep3, "");
 
-      receivers.forEach((r, key) => {
-        receivers.set(key, { ...r, online: false, barPct: 0, statusText: "TX detenido" });
-      });
+      metricStep1.textContent = "Sin señal (-∞ dB)";
+      metricStep2.textContent = "Detenido (0 bloques/s)";
+      metricStep3.textContent = "Sin envío (0.0 KB/s)";
 
-      btnStart.disabled = false;
-      btnStop.disabled = true;
-      writeLog("TX detenido.");
+      barStep1.style.width = "0%";
+      barStep2.style.width = "0%";
+      barStep3.style.width = "0%";
+
+      receivers.forEach((r, key) => {
+        receivers.set(key, {
+          ...r,
+          online: false,
+          barPct: 0,
+          statusText: "En espera"
+        });
+      });
       renderReceivers();
+      writeLog("TX detenido.");
     }
 
     btnRefresh.addEventListener("click", loadAudioInputs);
@@ -1103,38 +1065,9 @@
     btnStart.addEventListener("click", startTX);
     btnStop.addEventListener("click", stopTX);
 
-    (async function initAutoHost() {
-      const port = window.location.port || "9000";
-      let detectedHost = "";
-
-      try {
-        const res = await fetch("/api/host-info", { cache: "no-store" });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.ip && !data.ip.startsWith("127.")) {
-            detectedHost = `${data.ip}:${port}`;
-          }
-        }
-      } catch (_) {}
-
-      if (!detectedHost) {
-        const ip = await detectLocalIPv4();
-        if (ip && !ip.startsWith("127.")) {
-          detectedHost = `${ip}:${port}`;
-        }
-      }
-
-      if (!detectedHost) {
-        const saved = (localStorage.getItem(STORAGE_KEY_HOST_RED) || "").trim();
-        detectedHost = saved || window.location.host || `127.0.0.1:${port}`;
-      }
-
-      hostRedInput.value = detectedHost;
-      localStorage.setItem(STORAGE_KEY_HOST_RED, detectedHost);
-
-      loadSavedReceivers();
-      renderReceivers();
-    })();
+    loadSavedReceivers();
+    renderReceivers();
+    writeLog("Listo. Pulsa 'Buscar entrada' o 'Capturar PC / Pestaña'.");
   </script>
 </body>
 </html>
