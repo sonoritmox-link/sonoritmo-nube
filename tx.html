@@ -461,6 +461,8 @@
     let ws = null;
     let monitorTimer = null;
     let isRunning = false;
+    let reconnectTimer = null;
+    let activePunto = "PUNTO-01";
 
     let blocksConverted = 0;
     let blocksLastSec = 0;
@@ -833,8 +835,8 @@
             const wsReady = ws && ws.readyState === WebSocket.OPEN;
             const txPct = wsReady ? Math.min(100, Math.max(12, Math.round((Number(kbps) / 200) * 100))) : 0;
             barStep3.style.width = `${txPct}%`;
-            metricStep3.textContent = wsReady ? `Enviando (${kbps} KB/s)` : "Desconectado";
-            setDot(dotStep3, wsReady ? "on" : "err");
+            metricStep3.textContent = wsReady ? `Enviando (${kbps} KB/s)` : "Reconectando...";
+            setDot(dotStep3, wsReady ? "on" : "warn");
 
             receivers.forEach((r, key) => {
               const rxBar = wsReady ? Math.min(100, Math.max(25, currentPeakPct || 40)) : 0;
@@ -842,7 +844,7 @@
                 ...r,
                 online: wsReady,
                 barPct: rxBar,
-                statusText: wsReady ? `Enlace activo (${kbps} KB/s)` : "En espera"
+                statusText: wsReady ? `Enlace activo (${kbps} KB/s)` : "Reconectando..."
               });
             });
             renderReceivers();
@@ -851,10 +853,69 @@
       }, 100);
     }
 
+    function connectTXSocket(punto) {
+      if (!isRunning) return;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      if (ws) {
+        try {
+          ws.onopen = null;
+          ws.onclose = null;
+          ws.onerror = null;
+          ws.close();
+        } catch (_) {}
+        ws = null;
+      }
+
+      const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsHost = window.location.host || "127.0.0.1:9000";
+      const socket = new WebSocket(`${wsProto}//${wsHost}/ws/tx/${encodeURIComponent(punto)}`);
+      socket.binaryType = "arraybuffer";
+      ws = socket;
+
+      setDot(dotStep3, "warn");
+      metricStep3.textContent = "Conectando enlace...";
+
+      socket.onopen = () => {
+        if (!isRunning || ws !== socket) return;
+        setDot(dotStep3, "on");
+        metricStep3.textContent = "Enlace listo (0.0 KB/s)";
+        writeLog(`Transmitiendo en punto [${punto}].`);
+        renderReceivers();
+      };
+
+      socket.onclose = (ev) => {
+        if (ws === socket) ws = null;
+        if (!isRunning) {
+          setDot(dotStep3, "err");
+          metricStep3.textContent = "Enlace cerrado";
+          btnStart.disabled = false;
+          btnStop.disabled = true;
+          return;
+        }
+        writeLog(`Enlace cerrado (código ${ev.code}). Reintentando en 1.5s...`);
+        setDot(dotStep3, "warn");
+        metricStep3.textContent = "Reconectando...";
+        reconnectTimer = setTimeout(() => {
+          if (isRunning) connectTXSocket(activePunto);
+        }, 1500);
+      };
+
+      socket.onerror = () => {
+        if (!isRunning) return;
+        writeLog("Error en la conexión de transmisión.");
+        setDot(dotStep3, "warn");
+        metricStep3.textContent = "Reintentando enlace...";
+      };
+    }
+
     async function startTX() {
       if (isRunning) return;
       const deviceId = selectInput.value;
       const punto = (puntoInput.value || "PUNTO-01").trim();
+      activePunto = punto;
 
       if (!deviceId) {
         writeLog("Primero pulsa 'Buscar entrada' o 'Capturar PC / Pestaña'.");
@@ -925,44 +986,13 @@
         metricStep2.textContent = "Preparando datos...";
         writeLog("Conversión de audio a datos iniciada.");
 
-        const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
-        const wsHost = window.location.host || "127.0.0.1:9000";
-        ws = new WebSocket(`${wsProto}//${wsHost}/ws/tx/${encodeURIComponent(punto)}`);
-        ws.binaryType = "arraybuffer";
-
         isRunning = true;
         btnStop.disabled = false;
         startMonitorLoop();
-
-        setDot(dotStep3, "warn");
-        metricStep3.textContent = "Conectando enlace...";
-
-        ws.onopen = () => {
-          setDot(dotStep3, "on");
-          metricStep3.textContent = "Enlace listo (0.0 KB/s)";
-          writeLog(`Transmitiendo en punto [${punto}].`);
-          renderReceivers();
-        };
-
-        ws.onclose = (ev) => {
-          writeLog(`Enlace de transmisión cerrado (código ${ev.code}).`);
-          if (isRunning) {
-            stopTX();
-          } else {
-            setDot(dotStep3, "err");
-            metricStep3.textContent = "Enlace cerrado";
-            btnStart.disabled = false;
-            btnStop.disabled = true;
-          }
-        };
-
-        ws.onerror = () => {
-          writeLog("Error en la conexión de transmisión.");
-          setDot(dotStep3, "err");
-          metricStep3.textContent = "Error de enlace";
-        };
+        connectTXSocket(punto);
 
         processor.onaudioprocess = (e) => {
+          if (!isRunning) return;
           const chL = e.inputBuffer.getChannelData(0);
           const chR = e.inputBuffer.numberOfChannels > 1 ? e.inputBuffer.getChannelData(1) : chL;
           const len = chL.length;
@@ -977,7 +1007,7 @@
 
           blocksConverted++;
 
-          if (ws && ws.readyState === WebSocket.OPEN) {
+          if (ws && ws.readyState === WebSocket.OPEN && ws.bufferedAmount < 262144) {
             ws.send(interleaved.buffer);
             bytesSent += interleaved.byteLength;
           }
@@ -992,6 +1022,11 @@
       isRunning = false;
       btnStart.disabled = false;
       btnStop.disabled = true;
+
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
 
       if (monitorTimer) {
         clearInterval(monitorTimer);
@@ -1032,18 +1067,21 @@
       }
 
       if (ws) {
-        try { ws.close(); } catch (_) {}
+        try {
+          ws.onopen = null;
+          ws.onclose = null;
+          ws.onerror = null;
+          ws.close();
+        } catch (_) {}
         ws = null;
       }
 
       setDot(dotStep1, "");
       setDot(dotStep2, "");
       setDot(dotStep3, "");
-
       metricStep1.textContent = "Sin señal (-∞ dB)";
       metricStep2.textContent = "Detenido (0 bloques/s)";
       metricStep3.textContent = "Sin envío (0.0 KB/s)";
-
       barStep1.style.width = "0%";
       barStep2.style.width = "0%";
       barStep3.style.width = "0%";
@@ -1059,6 +1097,163 @@
       renderReceivers();
       writeLog("TX detenido.");
     }
+
+    btnRefresh.addEventListener("click", loadAudioInputs);
+    btnSystemAudio.addEventListener("click", captureSystemAudio);
+    btnStart.addEventListener("click", startTX);
+    btnStop.addEventListener("click", stopTX);
+
+    loadSavedReceivers();
+    renderReceivers();
+    writeLog("Listo. Pulsa 'Buscar entrada' o 'Capturar PC / Pestaña'.");
+  </script>
+</body>
+</html>
+displayCaptureStream.getTracks().forEach(t => t.stop());
+          displayCaptureStream = null;
+        }
+      }
+
+      if (ws) {
+        try {
+          ws.onopen = null;
+          ws.onclose = null;
+          ws.onerror = null;
+          ws.close();
+        } catch (_) {}
+        ws = null;
+      }
+
+      setDot(dotStep1, "");
+      setDot(dotStep2, "");
+      setDot(dotStep3, "");
+      metricStep1.textContent = "Sin señal (-∞ dB)";
+      metricStep2.textContent = "Detenido (0 bloques/s)";
+      metricStep3.textContent = "Sin envío (0.0 KB/s)";
+      barStep1.style.width = "0%";
+      barStep2.style.width = "0%";
+      barStep3.style.width = "0%";
+
+      receivers.forEach((r, key) => {
+        receivers.set(key, {
+          ...r,
+          online: false,
+          barPct: 0,
+          statusText: "En espera"
+        });
+      });
+      renderReceivers();
+      writeLog("TX detenido.");
+    }
+
+    let reconnectTimer = null;
+    let activePunto = "PUNTO-01";
+
+    function connectTXSocket(punto) {
+      if (!isRunning) return;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      if (ws) {
+        try {
+          ws.onopen = null;
+          ws.onclose = null;
+          ws.onerror = null;
+          ws.close();
+        } catch (_) {}
+        ws = null;
+      }
+
+      const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsHost = window.location.host || "127.0.0.1:9000";
+      const socket = new WebSocket(`${wsProto}//${wsHost}/ws/tx/${encodeURIComponent(punto)}`);
+      socket.binaryType = "arraybuffer";
+      ws = socket;
+
+      setDot(dotStep3, "warn");
+      metricStep3.textContent = "Conectando enlace...";
+
+      socket.onopen = () => {
+        if (!isRunning || ws !== socket) return;
+        setDot(dotStep3, "on");
+        metricStep3.textContent = "Enlace listo (0.0 KB/s)";
+        writeLog(`Transmitiendo en punto [${punto}].`);
+        renderReceivers();
+      };
+
+      socket.onclose = (ev) => {
+        if (ws === socket) ws = null;
+        if (!isRunning) {
+          setDot(dotStep3, "err");
+          metricStep3.textContent = "Enlace cerrado";
+          btnStart.disabled = false;
+          btnStop.disabled = true;
+          return;
+        }
+        writeLog(`Enlace cerrado (código ${ev.code}). Reintentando en 1.5s...`);
+        setDot(dotStep3, "warn");
+        metricStep3.textContent = "Reconectando...";
+        reconnectTimer = setTimeout(() => {
+          if (isRunning) connectTXSocket(activePunto);
+        }, 1500);
+      };
+
+      socket.onerror = () => {
+        if (!isRunning) return;
+        writeLog("Error en la conexión de transmisión.");
+        setDot(dotStep3, "warn");
+        metricStep3.textContent = "Reintentando enlace...";
+      };
+    }
+
+    const _origStartTX = startTX;
+    startTX = async function() {
+      activePunto = (puntoInput.value || "PUNTO-01").trim();
+      await _origStartTX();
+      if (isRunning && processor) {
+        if (ws) {
+          try {
+            ws.onopen = null;
+            ws.onclose = null;
+            ws.onerror = null;
+            ws.close();
+          } catch (_) {}
+          ws = null;
+        }
+        connectTXSocket(activePunto);
+        processor.onaudioprocess = (e) => {
+          if (!isRunning) return;
+          const chL = e.inputBuffer.getChannelData(0);
+          const chR = e.inputBuffer.numberOfChannels > 1 ? e.inputBuffer.getChannelData(1) : chL;
+          const len = chL.length;
+          const interleaved = new Int16Array(len * 2);
+
+          for (let i = 0; i < len; i++) {
+            const sL = Math.max(-1, Math.min(1, chL[i]));
+            const sR = Math.max(-1, Math.min(1, chR[i]));
+            interleaved[i * 2] = sL < 0 ? sL * 0x8000 : sL * 0x7FFF;
+            interleaved[i * 2 + 1] = sR < 0 ? sR * 0x8000 : sR * 0x7FFF;
+          }
+
+          blocksConverted++;
+
+          if (ws && ws.readyState === WebSocket.OPEN && ws.bufferedAmount < 262144) {
+            ws.send(interleaved.buffer);
+            bytesSent += interleaved.byteLength;
+          }
+        };
+      }
+    };
+
+    const _origStopTX = stopTX;
+    stopTX = function() {
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      _origStopTX();
+    };
 
     btnRefresh.addEventListener("click", loadAudioInputs);
     btnSystemAudio.addEventListener("click", captureSystemAudio);
