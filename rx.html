@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SONORITMO Link — Receptor RX</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; max-width: 680px; margin: 18px auto; padding: 14px; }
+    .panel { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 16px; }
+    .top-grid { display: grid; grid-template-columns: 1fr 70px; gap: 14px; }
+    .focos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px; }
+    .foco-box { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .foco { width: 16px; height: 16px; border-radius: 50%; background: #475569; flex-shrink: 0; }
+    .foco.verde { background: #22c55e; box-shadow: 0 0 10px #22c55e; }
+    .foco.amarillo { background: #eab308; box-shadow: 0 0 10px #eab308; }
+    .foco.rojo { background: #ef4444; box-shadow: 0 0 10px #ef4444; }
+    .vu-wrap { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 8px 6px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+    .vu-track { width: 22px; height: 140px; background: #020617; border-radius: 4px; display: flex; align-items: flex-end; overflow: hidden; }
+    .vu-fill { width: 100%; height: 0%; background: linear-gradient(to top, #22c55e 65%, #eab308 85%, #ef4444 100%); transition: height 0.06s; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+    input, button { padding: 8px 10px; border-radius: 7px; border: 1px solid #334155; background: #0f172a; color: #fff; font-size: 13px; }
+    button { background: #16a34a; border: none; font-weight: bold; cursor: pointer; }
+    button.gris { background: #334155; }
+    .estado-txt { font-size: 12px; color: #94a3b8; margin-bottom: 10px; }
+    .log-box { margin-top: 12px; background: #020617; border: 1px solid #334155; border-radius: 8px; padding: 10px; font-size: 12px; color: #94a3b8; max-height: 120px; overflow-y: auto; display: none; }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h3 style="margin:0 0 6px 0;color:#4ade80;">SONORITMO Link — RECEPTOR (RX)</h3>
+    <div id="estadoConexion" class="estado-txt">Listo para conectar</div>
+
+    <div class="top-grid">
+      <div>
+        <div class="focos">
+          <div class="foco-box"><span id="fLlega" class="foco"></span><span>1. Llega señal</span></div>
+          <div class="foco-box"><span id="fDeco" class="foco"></span><span>2. Transformando a audio</span></div>
+          <div class="foco-box"><span id="fSalida" class="foco"></span><span>3. Salida de audio</span></div>
+          <div class="foco-box"><span id="fPunto" class="foco"></span><span>4. Punto activo</span></div>
+        </div>
+
+        <div class="row">
+          <input id="punto" value="PUNTO-01" style="width:180px;" placeholder="Clave / Punto (ej. PUNTO-01)" />
+          <label style="font-size:12px;display:flex;align-items:center;gap:5px;">
+            <input id="chkOn" type="checkbox" checked onchange="actualizarPuntoFoco()" /> On
+          </label>
+          <button type="button" onclick="iniciarRX()">Activar RX</button>
+          <button type="button" class="gris" onclick="toggleRegistro()">Ver registro</button>
+        </div>
+
+        <div class="row">
+          <label style="font-size:12px;color:#94a3b8;">Respaldo local (anti-silencio): <input id="backupFile" type="file" accept="audio/*" /></label>
+        </div>
+      </div>
+
+      <div class="vu-wrap">
+        <span style="font-size:10px;color:#94a3b8;">dB</span>
+        <div class="vu-track"><div id="vuFill" class="vu-fill"></div></div>
+        <span style="font-size:10px;color:#94a3b8;">OUT</span>
+      </div>
+    </div>
+
+    <div id="registroBox" class="log-box"></div>
+    <audio id="backupAudio" loop></audio>
+  </div>
+
+  <script>
+    let ws = null;
+    let audioCtx = null;
+    let nextTime = 0;
+    let watchdogTimer = null;
+    let reconnectTimer = null;
+    let currentBackupUrl = null;
+    let rxActivo = false;
+    const SAMPLE_RATE = 48000;
+    const CHANNELS = 2;
+
+    const params = new URLSearchParams(location.search);
+    if (params.get("punto")) {
+      document.getElementById("punto").value = params.get("punto").trim();
+    }
+
+    function setEstado(txt) {
+      document.getElementById("estadoConexion").textContent = txt;
+    }
+
+    function setFoco(id, color) {
+      document.getElementById(id).className = "foco " + (color || "");
+    }
+
+    function setVU(pct) {
+      document.getElementById("vuFill").style.height = Math.max(0, Math.min(100, pct)) + "%";
+    }
+
+    function logMsg(msg) {
+      const box = document.getElementById("registroBox");
+      const hora = new Date().toLocaleTimeString();
+      box.innerHTML += `<div>[${hora}] ${msg}</div>`;
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function toggleRegistro() {
+      const box = document.getElementById("registroBox");
+      box.style.display = box.style.display === "none" || !box.style.display ? "block" : "none";
+    }
+
+    function cerrarWS() {
+      clearTimeout(watchdogTimer);
+      clearTimeout(reconnectTimer);
+      if (ws) {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onerror = null;
+        ws.onclose = null;
+        try { ws.close(); } catch (_) {}
+        ws = null;
+      }
+    }
+
+    function actualizarPuntoFoco() {
+      const on = document.getElementById("chkOn").checked;
+      setFoco("fPunto", on ? "verde" : "rojo");
+      if (!on) {
+        rxActivo = false;
+        cerrarWS();
+        setEstado("Punto apagado (On desmarcado)");
+        activarRespaldo("Punto apagado (On)");
+      } else if (rxActivo) {
+        iniciarRX();
+      }
+    }
+    actualizarPuntoFoco();
+
+    document.getElementById("backupFile").addEventListener("change", e => {
+      const f = e.target.files[0];
+      if (f) {
+        if (currentBackupUrl) {
+          URL.revokeObjectURL(currentBackupUrl);
+        }
+        currentBackupUrl = URL.createObjectURL(f);
+        document.getElementById("backupAudio").src = currentBackupUrl;
+        logMsg("Audio de respaldo cargado: " + f.name);
+      }
+    });
+
+    function activarRespaldo(motivo) {
+      setFoco("fLlega", "rojo");
+      setFoco("fDeco", "");
+      setFoco("fSalida", "amarillo");
+      setVU(0);
+      const b = document.getElementById("backupAudio");
+      if (b.src && b.paused) b.play().catch(() => {});
+      logMsg("Respaldo local activo (" + motivo + ")");
+    }
+
+    function desactivarRespaldo() {
+      const b = document.getElementById("backupAudio");
+      if (!b.paused) b.pause();
+    }
+
+    function resetWatchdog() {
+      clearTimeout(watchdogTimer);
+      watchdogTimer = setTimeout(() => {
+        setEstado("Esperando bloques del emisor...");
+        activarRespaldo("Sin paquetes recientes del TX");
+      }, 1500);
+    }
+
+    function reproducirBloqueInt16(buffer) {
+      if (!audioCtx) return;
+      const pcm = new Int16Array(buffer);
+      if (pcm.length === 0) return;
+
+      const frames = Math.floor(pcm.length / CHANNELS);
+      if (frames <= 0) return;
+
+      const audioBuffer = audioCtx.createBuffer(CHANNELS, frames, SAMPLE_RATE);
+      let sumSq = 0;
+
+      for (let ch = 0; ch < CHANNELS; ch++) {
+        const channelData = audioBuffer.getChannelData(ch);
+        for (let i = 0; i < frames; i++) {
+          const sample = pcm[i * CHANNELS + ch] / 32768;
+          channelData[i] = sample;
+          if (ch === 0) sumSq += sample * sample;
+        }
+      }
+
+      const rms = Math.sqrt(sumSq / frames);
+      const db = rms > 0.00001 ? 20 * Math.log10(rms) : -60;
+      const pct = Math.max(0, Math.min(100, ((db + 55) / 55) * 100));
+      setVU(pct);
+
+      const src = audioCtx.createBufferSource();
+      src.buffer = audioBuffer;
+      src.connect(audioCtx.destination);
+
+      const now = audioCtx.currentTime;
+      if (nextTime < now + 0.02 || nextTime > now + 0.5) {
+        nextTime = now + 0.06;
+      }
+      src.start(nextTime);
+      nextTime += audioBuffer.duration;
+    }
+
+    async function iniciarRX() {
+      if (!document.getElementById("chkOn").checked) {
+        return logMsg("Marca 'On' para activar el punto.");
+      }
+      const punto = (document.getElementById("punto").value || "PUNTO-01").trim();
+      document.getElementById("punto").value = punto;
+      rxActivo = true;
+
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
+      }
+      if (audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
+
+      cerrarWS();
+
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      setFoco("fLlega", "amarillo");
+      setFoco("fDeco", "");
+      setFoco("fSalida", "");
+      setEstado(`Conectando a [${punto}]...`);
+      nextTime = audioCtx.currentTime + 0.06;
+
+      ws = new WebSocket(`${proto}//${location.host}/ws/rx/${encodeURIComponent(punto)}`);
+      ws.binaryType = "arraybuffer";
+
+      ws.onopen = () => {
+        setEstado(`Conectado en [${punto}] — esperando señal del TX`);
+        logMsg(`Receptor conectado en [${punto}] esperando señal.`);
+      };
+
+      ws.onmessage = ev => {
+        if (ev.data instanceof ArrayBuffer) {
+          desactivarRespaldo();
+          setFoco("fLlega", "verde");
+          setFoco("fDeco", "verde");
+          setFoco("fSalida", "verde");
+          setEstado(`Recibiendo audio en [${punto}]`);
+          reproducirBloqueInt16(ev.data);
+          resetWatchdog();
+        } else {
+          try {
+            const data = JSON.parse(ev.data);
+            if (data.type === "peer_disconnected") {
+              clearTimeout(watchdogTimer);
+              setEstado(`Emisor desconectado en [${punto}]`);
+              activarRespaldo("Emisor desconectado");
+            }
+          } catch (_) {}
+        }
+      };
+
+      ws.onerror = () => {
+        setEstado(`Error conectando a [${punto}]`);
+        logMsg("Error de conexión en el receptor.");
+      };
+
+      ws.onclose = () => {
+        clearTimeout(watchdogTimer);
+        activarRespaldo("Conexión cerrada");
+        if (rxActivo && document.getElementById("chkOn").checked) {
+          setEstado(`Reconectando a [${punto}]...`);
+          reconnectTimer = setTimeout(() => iniciarRX(), 2000);
+        }
+      };
+    }
+  </script>
+</body>
+</html>

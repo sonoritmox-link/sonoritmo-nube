@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SONORITMO LINK — Emisor (TX)</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #2ea043;
+      --danger: #da3633;
+      --warn: #d29922;
+      --info: #2f81f7;
+    }
+
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .card {
+      max-width: 760px;
+      margin: 0 auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.3rem;
+    }
+
+    .sub {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    @media (max-width: 640px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    select, input[type="text"] {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #fff;
+      background: var(--info);
+    }
+
+    button.start { background: var(--accent); }
+    button.stop { background: var(--danger); }
+    button.sec { background: #21262d; border: 1px solid var(--border); }
+    button.sys { background: #1f6feb; border: 1px solid #388bfd; }
+    button.sm { padding: 8px 12px; font-size: 0.84rem; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .steps-box {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .step-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+
+    .step-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+    }
+
+    .step-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+    }
+
+    .dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #484f58;
+      flex-shrink: 0;
+    }
+
+    .dot.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+    .dot.warn { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+    .dot.err { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+    .metric {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .bar-bg {
+      width: 100%;
+      height: 12px;
+      background: #21262d;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+
+    .bar-fill {
+      height: 100%;
+      width: 0%;
+      transition: width 0.06s linear;
+    }
+
+    .bar-audio { background: linear-gradient(90deg, #2ea043 0%, #d29922 75%, #da3633 95%); }
+    .bar-proc { background: linear-gradient(90deg, #1f6feb 0%, #58a6ff 100%); }
+    .bar-tx { background: linear-gradient(90deg, #2ea043 0%, #3fb950 100%); }
+    .bar-rx { background: linear-gradient(90deg, #2ea043 0%, #d29922 80%, #da3633 100%); }
+
+    .rx-section {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+    }
+
+    .rx-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .rx-add-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .rx-add-row input {
+      flex: 1;
+      min-width: 180px;
+      padding: 8px 10px;
+      font-size: 0.88rem;
+    }
+
+    .rx-list {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .rx-item {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+
+    .rx-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.84rem;
+      margin-bottom: 8px;
+    }
+
+    .rx-link-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+
+    .rx-tag {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #21262d;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      margin-right: 6px;
+    }
+
+    .rx-tag.pc2 {
+      color: #79c0ff;
+      border-color: rgba(88, 166, 255, 0.45);
+      background: rgba(88, 166, 255, 0.12);
+    }
+
+    .rx-tag.cel {
+      color: #7ee787;
+      border-color: rgba(46, 160, 67, 0.45);
+      background: rgba(46, 160, 67, 0.12);
+    }
+
+    .rx-url-wrap {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 4px;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .rx-url {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.78rem;
+      color: #58a6ff;
+      word-break: break-all;
+    }
+
+    .rx-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-mini {
+      background: #21262d;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+    }
+
+    .btn-mini:hover {
+      border-color: var(--info);
+      background: var(--info);
+      color: #fff;
+    }
+
+    .btn-del {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+    }
+
+    .btn-del:hover {
+      color: #fff;
+      border-color: var(--danger);
+      background: var(--danger);
+    }
+
+    .log {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      height: 120px;
+      overflow-y: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Emisor de Audio (TX)</h1>
+    <div class="sub">Control de entrada, conversión a datos, transmisión y receptores</div>
+
+    <div class="grid">
+      <div>
+        <label for="audioInput">Entrada de Audio (Consola / Interfaz / Mic)</label>
+        <select id="audioInput">
+          <option value="">Pulsa "Buscar entrada" o "Capturar PC / Pestaña"</option>
+        </select>
+      </div>
+      <div>
+        <label for="puntoId">Clave / Punto de Enlace</label>
+        <input id="puntoId" type="text" value="PUNTO-01" />
+      </div>
+    </div>
+
+    <div style="margin-bottom: 16px;">
+      <label for="hostRed">IP o Host de Red para Otra PC y Celular (ej. 192.168.1.50:9000)</label>
+      <input id="hostRed" type="text" placeholder="Pon tu IPv4:9000 (ej. 192.168.1.50:9000) para generar enlaces de Otra PC y Celular" />
+    </div>
+
+    <div class="row">
+      <button id="btnRefresh" class="sec" type="button">Buscar entrada</button>
+      <button id="btnSystemAudio" class="sys" type="button">Capturar PC / Pestaña</button>
+      <button id="btnStart" class="start" type="button">Iniciar TX</button>
+      <button id="btnStop" class="stop" type="button" disabled>Detener TX</button>
+    </div>
+
+    <div class="row">
+      <label for="gainRange" style="margin: 0;">Ganancia TX: <span id="gainVal">100%</span></label>
+      <input id="gainRange" type="range" min="0" max="200" value="100" style="flex: 1; min-width: 160px;" />
+    </div>
+
+    <div class="steps-box">
+      <div class="step-card">
+        <div class="step-head">
+          <div class="step-title">
+            <span id="dotStep1" class="dot"></span>
+            <span>Entrada de Audio</span>
+          </div>
+          <span id="metricStep1" class="metric">Sin señal (-∞ dB)</span>
+        </div>
+        <div class="bar-bg">
+          <div id="barStep1" class="bar-fill bar-audio"></div>
+        </div>
+      </div>
+
+      <div class="step-card">
+        <div class="step-head">
+          <div class="step-title">
+            <span id="dotStep2" class="dot"></span>
+            <span>Transformar a Datos</span>
+          </div>
+          <span id="metricStep2" class="metric">Detenido (0 bloques/s)</span>
+        </div>
+        <div class="bar-bg">
+          <div id="barStep2" class="bar-fill bar-proc"></div>
+        </div>
+      </div>
+
+      <div class="step-card">
+        <div class="step-head">
+          <div class="step-title">
+            <span id="dotStep3" class="dot"></span>
+            <span>Transmitiendo Datos</span>
+          </div>
+          <span id="metricStep3" class="metric">Sin envío (0.0 KB/s)</span>
+        </div>
+        <div class="bar-bg">
+          <div id="barStep3" class="bar-fill bar-tx"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rx-section">
+      <div class="rx-header">
+        <span>Enlaces a Receptores (<span id="rxCount">0</span>)</span>
+        <span id="rxSummary" class="metric">Sin receptores añadidos</span>
+      </div>
+
+      <div class="rx-add-row">
+        <input id="newRxInput" type="text" placeholder="Nombre o clave del receptor (ej. PUNTO-02 / Planta FM)" />
+        <button id="btnAddRx" class="sec sm" type="button">+ Añadir receptor</button>
+      </div>
+
+      <div id="rxList" class="rx-list"></div>
+    </div>
+
+    <div id="log" class="log"></div>
+  </div>
+
+  <script>
+    const STORAGE_KEY_DEVICE = "sonoritmo_tx_device_id";
+    const STORAGE_KEY_PUNTO = "sonoritmo_tx_punto_id";
+    const STORAGE_KEY_HOST_RED = "sonoritmo_tx_host_red";
+    const STORAGE_KEY_RX_LIST = "sonoritmo_tx_rx_list";
+
+    const selectInput = document.getElementById("audioInput");
+    const puntoInput = document.getElementById("puntoId");
+    const hostRedInput = document.getElementById("hostRed");
+    const btnRefresh = document.getElementById("btnRefresh");
+    const btnSystemAudio = document.getElementById("btnSystemAudio");
+    const btnStart = document.getElementById("btnStart");
+    const btnStop = document.getElementById("btnStop");
+    const gainRange = document.getElementById("gainRange");
+    const gainVal = document.getElementById("gainVal");
+    const logBox = document.getElementById("log");
+
+    const dotStep1 = document.getElementById("dotStep1");
+    const metricStep1 = document.getElementById("metricStep1");
+    const barStep1 = document.getElementById("barStep1");
+
+    const dotStep2 = document.getElementById("dotStep2");
+    const metricStep2 = document.getElementById("metricStep2");
+    const barStep2 = document.getElementById("barStep2");
+
+    const dotStep3 = document.getElementById("dotStep3");
+    const metricStep3 = document.getElementById("metricStep3");
+    const barStep3 = document.getElementById("barStep3");
+
+    const newRxInput = document.getElementById("newRxInput");
+    const btnAddRx = document.getElementById("btnAddRx");
+    const rxCountEl = document.getElementById("rxCount");
+    const rxSummaryEl = document.getElementById("rxSummary");
+    const rxListEl = document.getElementById("rxList");
+
+    let audioCtx = null;
+    let mediaStream = null;
+    let displayCaptureStream = null;
+    let gainNode = null;
+    let muteGain = null;
+    let analyser = null;
+    let processor = null;
+    let ws = null;
+    let monitorTimer = null;
+    let isRunning = false;
+
+    let blocksConverted = 0;
+    let blocksLastSec = 0;
+    let bytesSent = 0;
+    let bytesLastSec = 0;
+    let currentPeakPct = 0;
+
+    const receivers = new Map();
+
+    function makeSlug(text) {
+      return (text || "PUNTO-01")
+        .trim()
+        .replace(/\s+/g, "-")
+        .replace(/[^a-zA-Z0-9_-]/g, "");
+    }
+
+    function getLocalHostBase() {
+      const port = window.location.port || "9000";
+      const proto = window.location.protocol === "https:" ? "https:" : "http:";
+      return `${proto}//127.0.0.1:${port}`;
+    }
+
+    function detectLocalIPv4() {
+      return new Promise((resolve) => {
+        try {
+          const RTCPeerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
+          if (!RTCPeerConnection) return resolve("");
+
+          const pc = new RTCPeerConnection({ iceServers: [] });
+          pc.createDataChannel("");
+
+          let resolved = false;
+          const finish = (ip) => {
+            if (!resolved) {
+              resolved = true;
+              try { pc.close(); } catch (_) {}
+              resolve(ip || "");
+            }
+          };
+
+          pc.onicecandidate = (event) => {
+            if (!event || !event.candidate || !event.candidate.candidate) {
+              return finish("");
+            }
+            const candidate = event.candidate.candidate;
+            const match = candidate.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
+            if (match && match[1]) {
+              const ip = match[1];
+              if (!ip.startsWith("127.") && !ip.startsWith("169.254.")) {
+                return finish(ip);
+              }
+            }
+          };
+
+          pc.createOffer()
+            .then(offer => pc.setLocalDescription(offer))
+            .catch(() => finish(""));
+
+          setTimeout(() => finish(""), 1200);
+        } catch (_) {
+          resolve("");
+        }
+      });
+    }
+
+    function getNetworkHostBase() {
+      const rawHost = (hostRedInput.value || localStorage.getItem(STORAGE_KEY_HOST_RED) || "").trim();
+      const fallbackHost = window.location.host || `127.0.0.1:${window.location.port || "9000"}`;
+      const targetHost = rawHost || fallbackHost;
+
+      const cleanHost = targetHost.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+      const isHttps =
+        cleanHost.endsWith(":443") ||
+        cleanHost.endsWith(".ngrok-free.app") ||
+        cleanHost.endsWith(".ngrok.io") ||
+        cleanHost.endsWith(".trycloudflare.com") ||
+        cleanHost.endsWith(".pythonanywhere.com");
+      return `${isHttps ? "https:" : "http:"}//${cleanHost}`;
+    }
+
+    function buildLocalRxUrl(slug) {
+      const puntoActivo = (puntoInput.value || slug || "PUNTO-01").trim();
+      return `${getLocalHostBase()}/rx?punto=${encodeURIComponent(puntoActivo)}`;
+    }
+
+    function buildNetworkRxUrl(slug) {
+      const netBase = getNetworkHostBase();
+      if (!netBase) return "";
+      const puntoActivo = (puntoInput.value || slug || "PUNTO-01").trim();
+      return `${netBase}/rx?punto=${encodeURIComponent(puntoActivo)}`;
+    }
+
+    puntoInput.value = localStorage.getItem(STORAGE_KEY_PUNTO) || "PUNTO-01";
+    puntoInput.addEventListener("input", () => {
+      localStorage.setItem(STORAGE_KEY_PUNTO, puntoInput.value.trim() || "PUNTO-01");
+      renderReceivers();
+    });
+
+    hostRedInput.value = localStorage.getItem(STORAGE_KEY_HOST_RED) || "";
+    hostRedInput.addEventListener("input", () => {
+      localStorage.setItem(STORAGE_KEY_HOST_RED, hostRedInput.value.trim());
+      renderReceivers();
+    });
+
+    function saveCustomReceivers() {
+      const items = Array.from(receivers.values()).map(r => ({
+        id: r.id,
+        name: r.name,
+        slug: r.slug
+      }));
+      localStorage.setItem(STORAGE_KEY_RX_LIST, JSON.stringify(items));
+    }
+
+    function loadSavedReceivers() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_RX_LIST);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((item, idx) => {
+            const id = item.id || `rx_${idx + 1}`;
+            const name = item.name || id;
+            const slug = item.slug || makeSlug(name);
+            receivers.set(id, {
+              id,
+              name,
+              slug,
+              online: false,
+              barPct: 0,
+              statusText: "En espera"
+            });
+          });
+        }
+      } catch (_) {}
+    }
+
+    function writeLog(msg) {
+      const time = new Date().toLocaleTimeString();
+      logBox.innerHTML += `<div>[${time}] ${msg}</div>`;
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function setDot(el, state) {
+      el.className = "dot" + (state ? ` ${state}` : "");
+    }
+
+    function renderLinkRow(tagClass, tagText, url) {
+      return `
+        <div class="rx-link-box">
+          <div class="rx-url-wrap">
+            <span class="rx-tag ${tagClass}">${tagText}</span>
+            <span class="rx-url">${url}</span>
+          </div>
+          <div class="rx-actions">
+            <button class="btn-mini" type="button" onclick="copyRxUrl('${url.replace(/'/g, "\\'")}')">Copiar</button>
+            <a class="btn-mini" href="${url}" target="_blank" style="text-decoration:none;">Abrir RX</a>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderReceivers() {
+      const list = Array.from(receivers.values());
+      rxCountEl.textContent = String(list.length);
+
+      if (list.length === 0) {
+        rxSummaryEl.textContent = "Sin receptores añadidos";
+        rxListEl.innerHTML = `
+          <div class="rx-item">
+            <div class="rx-top">
+              <span>Ningún receptor en la lista todavía</span>
+              <span class="metric">Usa "+ Añadir receptor"</span>
+            </div>
+            <div class="bar-bg">
+              <div class="bar-fill bar-rx" style="width: 0%;"></div>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const activeCount = list.filter(r => r.online).length;
+      rxSummaryEl.textContent = `${activeCount} enlace(s) activo(s) de ${list.length}`;
+
+      rxListEl.innerHTML = list.map((r) => {
+        const localUrl = buildLocalRxUrl(r.slug);
+        const netUrl = buildNetworkRxUrl(r.slug);
+
+        return `
+          <div class="rx-item">
+            <div class="rx-top">
+              <span>${r.name}</span>
+              <div class="rx-actions">
+                <span class="metric">${r.statusText}</span>
+                <button class="btn-del" type="button" onclick="removeReceiver('${r.id.replace(/'/g, "")}')">Quitar</button>
+              </div>
+            </div>
+            ${renderLinkRow("", "Esta PC", localUrl)}
+            ${renderLinkRow("pc2", "Otra PC", netUrl)}
+            ${renderLinkRow("cel", "Celular", netUrl)}
+            <div class="bar-bg">
+              <div class="bar-fill bar-rx" style="width: ${Math.max(0, Math.min(100, r.barPct))}%;"></div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    window.copyRxUrl = function(url) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => {
+          writeLog(`Enlace copiado: ${url}`);
+        }).catch(() => {
+          writeLog(`Enlace listo: ${url}`);
+        });
+      } else {
+        writeLog(`Enlace listo: ${url}`);
+      }
+    };
+
+    window.removeReceiver = function(id) {
+      if (receivers.has(id)) {
+        const removed = receivers.get(id);
+        receivers.delete(id);
+        saveCustomReceivers();
+        renderReceivers();
+        writeLog(`Receptor quitado: ${removed.name}`);
+      }
+    };
+
+    function addReceiverFromInput() {
+      const rawName = (newRxInput.value || "").trim();
+      const index = receivers.size + 1;
+      const name = rawName || `Receptor ${index}`;
+      const slug = makeSlug(rawName || (puntoInput.value || "PUNTO-01") + `-RX${index}`);
+      const id = `rx_${Date.now()}_${index}`;
+      const wsReady = isRunning && ws && ws.readyState === WebSocket.OPEN;
+
+      receivers.set(id, {
+        id,
+        name,
+        slug,
+        online: wsReady,
+        barPct: wsReady ? 30 : 0,
+        statusText: wsReady ? "Enlace listo" : "En espera"
+      });
+
+      saveCustomReceivers();
+      newRxInput.value = "";
+      renderReceivers();
+      writeLog(`Receptor añadido: ${name}`);
+    }
+
+    btnAddRx.addEventListener("click", addReceiverFromInput);
+    newRxInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") addReceiverFromInput();
+    });
+
+    gainRange.addEventListener("input", () => {
+      const pct = Number(gainRange.value);
+      gainVal.textContent = `${pct}%`;
+      if (gainNode && audioCtx) {
+        gainNode.gain.setTargetAtTime(pct / 100, audioCtx.currentTime, 0.02);
+      }
+    });
+
+    async function loadAudioInputs() {
+      try {
+        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        tempStream.getTracks().forEach(t => t.stop());
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const inputs = devices.filter(d => d.kind === "audioinput");
+        const savedId = localStorage.getItem(STORAGE_KEY_DEVICE);
+
+        const hadSystemOpt = Array.from(selectInput.options).some(o => o.value === "__SYSTEM_AUDIO__");
+        selectInput.innerHTML = "";
+
+        if (hadSystemOpt) {
+          const sysOpt = document.createElement("option");
+          sysOpt.value = "__SYSTEM_AUDIO__";
+          sysOpt.textContent = "Audio del Sistema / Pestaña / Ventana (Activo)";
+          selectInput.appendChild(sysOpt);
+        }
+
+        if (inputs.length === 0 && !hadSystemOpt) {
+          selectInput.innerHTML = `<option value="">No se detectaron entradas de audio</option>`;
+          writeLog("No se encontraron entradas de audio.");
+          return;
+        }
+
+        inputs.forEach((dev, idx) => {
+          const opt = document.createElement("option");
+          opt.value = dev.deviceId;
+          opt.textContent = dev.label || `Entrada de audio #${idx + 1}`;
+          selectInput.appendChild(opt);
+        });
+
+        if (hadSystemOpt) {
+          selectInput.value = "__SYSTEM_AUDIO__";
+        } else if (savedId && inputs.some(d => d.deviceId === savedId)) {
+          selectInput.value = savedId;
+        }
+
+        writeLog(`Entradas encontradas: ${inputs.length}. Escoge la entrada o usa "Capturar PC / Pestaña".`);
+      } catch (err) {
+        writeLog(`Permiso pendiente o sin acceso (${err.message}). Pulsa "Buscar entrada" o "Capturar PC / Pestaña".`);
+        if (!Array.from(selectInput.options).some(o => o.value === "__SYSTEM_AUDIO__")) {
+          selectInput.innerHTML = `<option value="">Sin acceso aún — pulsa "Buscar entrada"</option>`;
+        }
+      }
+    }
+
+    async function captureSystemAudio() {
+      try {
+        if (displayCaptureStream) {
+          displayCaptureStream.getTracks().forEach(t => t.stop());
+          displayCaptureStream = null;
+        }
+
+        const capStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          }
+        });
+
+        const audioTracks = capStream.getAudioTracks();
+        if (!audioTracks || audioTracks.length === 0) {
+          capStream.getTracks().forEach(t => t.stop());
+          writeLog("No se detectó audio compartido. Marca 'Compartir audio' en la ventana del navegador.");
+          return;
+        }
+
+        displayCaptureStream = capStream;
+        mediaStream = new MediaStream(audioTracks);
+
+        audioTracks[0].onended = () => {
+          writeLog("Se detuvo la captura de audio del sistema/pestaña.");
+          if (isRunning && selectInput.value === "__SYSTEM_AUDIO__") {
+            stopTX();
+          }
+        };
+
+        let sysOpt = Array.from(selectInput.options).find(o => o.value === "__SYSTEM_AUDIO__");
+        if (!sysOpt) {
+          sysOpt = document.createElement("option");
+          sysOpt.value = "__SYSTEM_AUDIO__";
+          selectInput.prepend(sysOpt);
+        }
+        sysOpt.textContent = `Audio del Sistema / Pestaña (${audioTracks[0].label || "Capturado"})`;
+        selectInput.value = "__SYSTEM_AUDIO__";
+
+        writeLog("Audio de PC/pestaña capturado listo. Pulsa 'Iniciar TX' para transmitir.");
+      } catch (err) {
+        writeLog(`Captura de PC/pestaña cancelada o bloqueada: ${err.message}`);
+      }
+    }
+
+    selectInput.addEventListener("change", () => {
+      if (selectInput.value && selectInput.value !== "__SYSTEM_AUDIO__") {
+        localStorage.setItem(STORAGE_KEY_DEVICE, selectInput.value);
+      }
+      if (selectInput.value) {
+        writeLog(`Entrada escogida: ${selectInput.options[selectInput.selectedIndex].text}`);
+      }
+    });
+
+    function startMonitorLoop() {
+      if (monitorTimer) clearInterval(monitorTimer);
+      const freqData = analyser ? new Uint8Array(analyser.frequencyBinCount) : null;
+      let tick = 0;
+
+      monitorTimer = setInterval(() => {
+        tick++;
+
+        if (analyser && freqData && isRunning) {
+          analyser.getByteTimeDomainData(freqData);
+          let peak = 0;
+          for (let i = 0; i < freqData.length; i++) {
+            const v = Math.abs((freqData[i] - 128) / 128);
+            if (v > peak) peak = v;
+          }
+          currentPeakPct = Math.min(100, Math.round(peak * 140));
+          barStep1.style.width = `${currentPeakPct}%`;
+
+          if (peak > 0.001) {
+            const db = (20 * Math.log10(peak)).toFixed(1);
+            metricStep1.textContent = `Señal activa (${db} dB)`;
+            setDot(dotStep1, "on");
+          } else {
+            metricStep1.textContent = "Sin audio (-∞ dB)";
+            setDot(dotStep1, "warn");
+          }
+        }
+
+        if (tick % 10 === 0) {
+          const bps = blocksConverted - blocksLastSec;
+          const kbps = ((bytesSent - bytesLastSec) / 1024).toFixed(1);
+          blocksLastSec = blocksConverted;
+          bytesLastSec = bytesSent;
+
+          if (isRunning) {
+            const procPct = Math.min(100, Math.round((bps / 25) * 100));
+            barStep2.style.width = `${procPct}%`;
+            metricStep2.textContent = bps > 0 ? `Convirtiendo (${bps} bloques/s)` : "Sin bloques";
+            setDot(dotStep2, bps > 0 ? "on" : "warn");
+
+            const wsReady = ws && ws.readyState === WebSocket.OPEN;
+            const txPct = wsReady ? Math.min(100, Math.max(12, Math.round((Number(kbps) / 200) * 100))) : 0;
+            barStep3.style.width = `${txPct}%`;
+            metricStep3.textContent = wsReady ? `Enviando (${kbps} KB/s)` : "Desconectado";
+            setDot(dotStep3, wsReady ? "on" : "err");
+
+            receivers.forEach((r, key) => {
+              const rxBar = wsReady ? Math.min(100, Math.max(25, currentPeakPct || 40)) : 0;
+              receivers.set(key, {
+                ...r,
+                online: wsReady,
+                barPct: rxBar,
+                statusText: wsReady ? `Enlace activo (${kbps} KB/s)` : "En espera"
+              });
+            });
+            renderReceivers();
+          }
+        }
+      }, 100);
+    }
+
+    async function startTX() {
+      if (isRunning) return;
+      const deviceId = selectInput.value;
+      const punto = (puntoInput.value || "PUNTO-01").trim();
+
+      if (!deviceId) {
+        writeLog("Primero pulsa 'Buscar entrada' o 'Capturar PC / Pestaña'.");
+        return;
+      }
+
+      try {
+        btnStart.disabled = true;
+        setDot(dotStep1, "warn");
+        metricStep1.textContent = "Abriendo entrada...";
+
+        if (deviceId === "__SYSTEM_AUDIO__") {
+          const hasLiveTrack = mediaStream && mediaStream.getAudioTracks().some(t => t.readyState === "live");
+          if (!hasLiveTrack) {
+            await captureSystemAudio();
+          }
+          if (!mediaStream || !mediaStream.getAudioTracks().some(t => t.readyState === "live")) {
+            throw new Error("No hay pista de audio del sistema/pestaña activa.");
+          }
+        } else {
+          if (displayCaptureStream) {
+            displayCaptureStream.getTracks().forEach(t => t.stop());
+            displayCaptureStream = null;
+          }
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              deviceId: { exact: deviceId },
+              channelCount: 2,
+              sampleRate: 48000,
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false
+            },
+            video: false
+          });
+        }
+
+        setDot(dotStep1, "on");
+        const activeLabel = selectInput.options[selectInput.selectedIndex]?.text || deviceId;
+        writeLog(`Entrada activa: ${activeLabel}`);
+
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+        const source = audioCtx.createMediaStreamSource(mediaStream);
+
+        gainNode = audioCtx.createGain();
+        gainNode.gain.value = Number(gainRange.value) / 100;
+
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 1024;
+
+        processor = audioCtx.createScriptProcessor(2048, 2, 2);
+
+        muteGain = audioCtx.createGain();
+        muteGain.gain.value = 0;
+
+        source.connect(gainNode);
+        gainNode.connect(analyser);
+        analyser.connect(processor);
+        processor.connect(muteGain);
+        muteGain.connect(audioCtx.destination);
+
+        blocksConverted = 0;
+        blocksLastSec = 0;
+        bytesSent = 0;
+        bytesLastSec = 0;
+
+        setDot(dotStep2, "on");
+        metricStep2.textContent = "Preparando datos...";
+        writeLog("Conversión de audio a datos iniciada.");
+
+        const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const wsHost = window.location.host || "127.0.0.1:9000";
+        ws = new WebSocket(`${wsProto}//${wsHost}/ws/tx/${encodeURIComponent(punto)}`);
+        ws.binaryType = "arraybuffer";
+
+        setDot(dotStep3, "warn");
+        metricStep3.textContent = "Conectando enlace...";
+
+        ws.onopen = () => {
+          setDot(dotStep3, "on");
+          metricStep3.textContent = "Enlace listo (0.0 KB/s)";
+          writeLog(`Transmitiendo en punto [${punto}].`);
+          renderReceivers();
+        };
+
+        ws.onclose = () => {
+          writeLog("Enlace de transmisión cerrado.");
+          if (isRunning) {
+            stopTX();
+          } else {
+            setDot(dotStep3, "err");
+            metricStep3.textContent = "Enlace cerrado";
+            btnStart.disabled = false;
+            btnStop.disabled = true;
+          }
+        };
+
+        ws.onerror = () => {
+          writeLog("Error en la conexión de transmisión.");
+          setDot(dotStep3, "err");
+          metricStep3.textContent = "Error de enlace";
+        };
+
+        processor.onaudioprocess = (e) => {
+          const chL = e.inputBuffer.getChannelData(0);
+          const chR = e.inputBuffer.numberOfChannels > 1 ? e.inputBuffer.getChannelData(1) : chL;
+          const len = chL.length;
+          const interleaved = new Int16Array(len * 2);
+
+          for (let i = 0; i < len; i++) {
+            const sL = Math.max(-1, Math.min(1, chL[i]));
+            const sR = Math.max(-1, Math.min(1, chR[i]));
+            interleaved[i * 2] = sL < 0 ? sL * 0x8000 : sL * 0x7FFF;
+            interleaved[i * 2 + 1] = sR < 0 ? sR * 0x8000 : sR * 0x7FFF;
+          }
+
+          blocksConverted++;
+
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(interleaved.buffer);
+            bytesSent += interleaved.byteLength;
+          }
+        };
+
+        isRunning = true;
+        btnStop.disabled = false;
+        startMonitorLoop();
+        renderReceivers();
+      } catch (err) {
+        writeLog(`No se pudo iniciar TX: ${err.message}`);
+        setDot(dotStep1, "err");
+        metricStep1.textContent = "Error de entrada";
+        btnStart.disabled = false;
+        btnStop.disabled = true;
+      }
+    }
+
+    function stopTX() {
+      isRunning = false;
+      if (monitorTimer) {
+        clearInterval(monitorTimer);
+        monitorTimer = null;
+      }
+
+      if (processor) {
+        processor.disconnect();
+        processor.onaudioprocess = null;
+        processor = null;
+      }
+      if (muteGain) {
+        muteGain.disconnect();
+        muteGain = null;
+      }
+      if (gainNode) {
+        gainNode.disconnect();
+        gainNode = null;
+      }
+      if (analyser) {
+        analyser.disconnect();
+        analyser = null;
+      }
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(t => t.stop());
+        mediaStream = null;
+      }
+      if (displayCaptureStream) {
+        displayCaptureStream.getTracks().forEach(t => t.stop());
+        displayCaptureStream = null;
+      }
+      if (audioCtx) {
+        audioCtx.close().catch(() => {});
+        audioCtx = null;
+      }
+      if (ws) {
+        ws.onclose = null;
+        ws.onerror = null;
+        try { ws.close(); } catch (_) {}
+        ws = null;
+      }
+
+      barStep1.style.width = "0%";
+      barStep2.style.width = "0%";
+      barStep3.style.width = "0%";
+
+      metricStep1.textContent = "Sin señal (-∞ dB)";
+      metricStep2.textContent = "Detenido (0 bloques/s)";
+      metricStep3.textContent = "Sin envío (0.0 KB/s)";
+
+      setDot(dotStep1, "");
+      setDot(dotStep2, "");
+      setDot(dotStep3, "");
+
+      receivers.forEach((r, key) => {
+        receivers.set(key, { ...r, online: false, barPct: 0, statusText: "TX detenido" });
+      });
+
+      btnStart.disabled = false;
+      btnStop.disabled = true;
+      writeLog("TX detenido.");
+      renderReceivers();
+    }
+
+    btnRefresh.addEventListener("click", loadAudioInputs);
+    btnSystemAudio.addEventListener("click", captureSystemAudio);
+    btnStart.addEventListener("click", startTX);
+    btnStop.addEventListener("click", stopTX);
+
+    (async function initAutoHost() {
+      const port = window.location.port || "9000";
+      let detectedHost = "";
+
+      try {
+        const res = await fetch("/api/host-info", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.ip && !data.ip.startsWith("127.")) {
+            detectedHost = `${data.ip}:${port}`;
+          }
+        }
+      } catch (_) {}
+
+      if (!detectedHost) {
+        const ip = await detectLocalIPv4();
+        if (ip && !ip.startsWith("127.")) {
+          detectedHost = `${ip}:${port}`;
+        }
+      }
+
+      if (!detectedHost) {
+        const saved = (localStorage.getItem(STORAGE_KEY_HOST_RED) || "").trim();
+        detectedHost = saved || window.location.host || `127.0.0.1:${port}`;
+      }
+
+      hostRedInput.value = detectedHost;
+      localStorage.setItem(STORAGE_KEY_HOST_RED, detectedHost);
+
+      loadSavedReceivers();
+      renderReceivers();
+    })();
+  </script>
+</body>
+</html>
